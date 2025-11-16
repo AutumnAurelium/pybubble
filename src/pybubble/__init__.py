@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from importlib import metadata
 
-__all__ = ["__version__"]
+from .sandbox import Sandbox
 
+__all__ = ["__version__", "Sandbox"]
 
 try:  # pragma: no cover - exercised when installed
     __version__ = metadata.version("pybubble")

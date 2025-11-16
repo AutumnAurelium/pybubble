@@ -5,14 +5,18 @@ build-backend = "hatchling.build"
 [project]
 name = "pybubble"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Python package for running sandboxed code."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
 
+[project.scripts]
+pybubble = "pybubble.__cli__:main"
+
 [project.optional-dependencies]
 test = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.25.2",
 ]
 
 [tool.hatch.build.targets.wheel]
