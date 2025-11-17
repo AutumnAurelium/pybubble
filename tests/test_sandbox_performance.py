@@ -4,11 +4,12 @@ import asyncio
 import time
 import pytest
 from pybubble import Sandbox
+from conftest import ensure_default_exists
 
 
-async def run_sandbox_test(sandbox_id: int, work_dir: str, rootfs_location: str):
+async def run_sandbox_test(sandbox_id: int, rootfs_location: str):
     """Create a sandbox, run some Python code, and clean it up."""
-    sandbox = Sandbox(work_dir=work_dir, rootfs=rootfs_location)
+    sandbox = Sandbox(rootfs=rootfs_location)
     
     # Run some basic Python code
     code = f"""
@@ -28,15 +29,15 @@ print(f"Pi approximation: {{math.pi:.4f}}")
 @pytest.mark.asyncio
 async def test_sandbox_performance():
     """Test that sandbox creation and execution overhead is under 5ms per sandbox."""
-    work_dir = "work"
-    rootfs_location = "work/alpine-rootfs-python.tgz"
+    default_rootfs = ensure_default_exists()
+    rootfs_location = str(default_rootfs)
     num_sandboxes = 100
     
     start_time = time.perf_counter()
     
     # Create and run all sandboxes in parallel
     tasks = [
-        run_sandbox_test(i, work_dir, rootfs_location)
+        run_sandbox_test(i, rootfs_location)
         for i in range(num_sandboxes)
     ]
     

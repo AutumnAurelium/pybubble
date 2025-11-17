@@ -1,13 +1,14 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["hatchling", "editables"]
+build-backend = "build_backend"
+backend-path = ["."]
 
 [project]
 name = "pybubble"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python package for running sandboxed code."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]

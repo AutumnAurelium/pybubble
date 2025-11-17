@@ -13,4 +13,4 @@ work
 
 .pytest_cache
 
-default.tgz
+*.tgz

@@ -1,45 +1,89 @@
 import asyncio
 from pathlib import Path
-import shutil
 import subprocess
 import tempfile
-import uuid
 import shlex
 
 from pybubble.rootfs import setup_rootfs
 
+def is_system_compatible() -> bool:
+    """Checks if the system is Linux-based and has bubblewrap installed."""
+    try:
+        result = subprocess.run(
+            ["bwrap", "--help"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=5.0
+        )
+        # If there's an error message in stderr (like "command not found"), bwrap is not installed
+        if result.stderr and b"command not found" in result.stderr.lower():
+            return False
+        # If the command succeeded or stderr is empty/minimal, bwrap is installed
+        return True
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
 
 class Sandbox:
     def __init__(self, rootfs: str | Path, work_dir: str | Path | None = None, rootfs_path: str | Path | None = None):
+        """Creates a sandbox from the specified rootfs tarball, expected to be in the form of a tarball or compressed tarball.
+        
+        Args:
+            rootfs: Path to rootfs tarball
+            work_dir: Path to writable working directory for sandbox sessions. If None, uses a unique directory in `/tmp` (default: None)
+            rootfs_path: Path to extract/cache rootfs. If None, uses cache dir based on tarball hash (default: None)
+        """
+        
         # Create temporary directory if work_dir is not provided
+        if not is_system_compatible():
+            raise RuntimeError("System is not compatible with pybubble. Please ensure bubblewrap is installed and in your PATH.")
+        
         if work_dir is None:
             self._temp_dir = tempfile.TemporaryDirectory(dir="/tmp")
             self.work_dir = Path(self._temp_dir.name)
+            self.persist_session = False
         else:
             self._temp_dir = None
             self.work_dir = Path(work_dir)
+            self.persist_session = True
+        
+        # Ensure work_dir exists
+        Path.mkdir(self.work_dir, parents=True, exist_ok=True)
+        
+        # Temp directory to mount at /tmp
+        self.tmp_dir = tempfile.TemporaryDirectory(dir="/tmp")
         
         # Convert rootfs_path to Path if provided, otherwise None (which triggers caching)
         rootfs_path_obj = Path(rootfs_path) if rootfs_path is not None else None
         
         self.rootfs_dir = setup_rootfs(str(rootfs), rootfs_path_obj)
-        
-        self.uuid = str(uuid.uuid4())
-        self.session_dir = self.work_dir / f"session_{self.uuid}"
-        Path.mkdir(self.session_dir, parents=True, exist_ok=False)
 
     async def run(self, command: str, allow_network: bool = False, timeout: float = 10.0) -> tuple[bytes, bytes]:
-        """Runs a shell command in the sandbox. Returns (stdout, stderr) if the command succeeds, otherwise raises an exception."""
+        """Runs a shell command in the sandbox. Returns (stdout, stderr) if the command succeeds, otherwise raises an exception.
+        
+        Args:
+            command: Shell command to run
+            allow_network: Whether to allow network access
+            timeout: Command timeout in seconds
+        """
         built_command: list[str] = [
             "bwrap",
             "--unshare-all",
             "--die-with-parent",
+            # Make sure we're using the 'sandbox' user.
+            "--unshare-user",
+            "--uid", "1000",
+            # Bind root fs and work dir
+            "--ro-bind", shlex.quote(str(self.rootfs_dir.absolute())), "/",
+            "--bind", shlex.quote(str(self.work_dir.absolute())), "/home/sandbox",
+            # Bind new /dev/ and /proc/ dirs - must happen after rootfs mount
             "--dev", "/dev",
             "--proc", "/proc",
-            "--ro-bind", shlex.quote(str(self.rootfs_dir.absolute())), "/",
-            "--bind", shlex.quote(str(self.session_dir.absolute())), "/home/sandbox",
+            # Mount the temp dir at /tmp. We can't use --tmpfs because it doesn't persist between invocations of bwrap.
+            "--bind", shlex.quote(str(self.tmp_dir.name)), "/tmp",
+            # Set home directory and path
             "--setenv", "HOME", "/home/sandbox",
-            "--setenv", "PATH", "/usr/bin:/bin",
+            "--setenv", "PATH", "/usr/bin:/bin:/usr/local/bin",
             "--chdir", "/home/sandbox",
         ]
         
@@ -47,7 +91,9 @@ class Sandbox:
             # Bind system DNS config and allow network access
             built_command.extend(["--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf", "--share-net"])
         
-        built_command.extend(shlex.split(command))
+        built_command.extend(
+            ["bash", "-c", command]
+        )
         
         process = await asyncio.create_subprocess_exec(
             *built_command,
@@ -68,18 +114,22 @@ class Sandbox:
         return stdout or b"", stderr or b""
 
     async def run_python(self, code: str, allow_network: bool = False, timeout: float = 10.0) -> tuple[bytes, bytes]:
-        """Runs a Python script in the sandbox. Returns (stdout, stderr) if the code succeeds, otherwise raises an exception."""
+        """Runs a Python script in the sandbox. Returns (stdout, stderr) if the code succeeds, otherwise raises an exception.
         
-        script_path = self.session_dir / "script.py"
+        Args:
+            code: Python code to run
+            allow_network: Whether to allow network access
+            timeout: Command timeout in seconds
+        """
+        
+        script_path = self.work_dir / "script.py"
         with open(script_path, "w") as f:
             f.write(code)
         
         return await self.run("python script.py", allow_network, timeout)
 
     def __del__(self):
-        """Cleanup the sandbox session directory."""
-        if self.session_dir.exists():
-            shutil.rmtree(self.session_dir)
-        # Cleanup temporary directory if it was created
-        if self._temp_dir is not None:
+        """Cleanup the sandbox work directory if it's temporary."""
+        # Cleanup temporary directory if it was created and persistence is disabled
+        if self._temp_dir is not None and not self.persist_session:
             self._temp_dir.cleanup()

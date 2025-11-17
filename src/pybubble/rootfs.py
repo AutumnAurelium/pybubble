@@ -71,9 +71,9 @@ def setup_rootfs(rootfs: str, rootfs_path: Path | None = None) -> Path:
     
     return rootfs_dir
 
-def generate_rootfs(dockerfile: Path, output_file: Path) -> None:
+def generate_rootfs(dockerfile: Path, output_file: Path, compress_level: int = 6) -> None:
     """Generates a rootfs from a Dockerfile. Docker must be installed for this to work."""
     subprocess.run(["docker", "rm", "-f", "pybubble_rootfs"], check=True)
     subprocess.run(["docker", "build", "-t", "pybubble_rootfs", "-f", dockerfile, "."], check=True)
     subprocess.run(["docker", "create", "--name", "pybubble_rootfs", "pybubble_rootfs"], check=True)
-    subprocess.run(["docker", "export", "pybubble_rootfs", "-o", str(output_file)], check=True)
+    subprocess.run(["bash", "-c", f"docker export pybubble_rootfs | gzip -{compress_level} > {output_file}"], check=True)

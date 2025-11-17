@@ -2,6 +2,12 @@
 
 A simple wrapper around `bwrap` to create sandbox environments for executing code. It works without Docker or other daemon-based container runtimes, using shared read-only root filesystems for quick (1-2ms) setup times.
 
+While these environments are sandboxed and provide protection from accidental modification of your host system by overzealous LLMs, **pybubble is not an acceptable substitute for virtualization when running untrusted code**. If you are giving untrusted people access to this, either directly or via an LLM frontend, consider using more production-ready sandboxing or virtualization tools with pybubble just isolating environment state.
+
+Feel free to submit bug reports and pull requests via GitHub, but note that Arcee is not committing to long-term maintenence of this software. This is just a small library I built in my spare time and thought everyone else would find useful.
+
+Due to relying on Linux kernel features to operate, pybubble is not compatible with macOS or Windows.
+
 ## Setup
 
 Install `bwrap`. On Ubuntu, do:
@@ -10,21 +16,28 @@ Install `bwrap`. On Ubuntu, do:
 sudo apt-get install bubblewrap
 ```
 
-Install `pybubble`:
+Then, add `pybubble` to your project.
 
 ```bash
 uv add pybubble
 ```
 
-## Building a root filesystem archive
+## Root filesystem archives
 
-A root filesystem archive can be generated from any docker image. To generate a root filesystem, ensure you have docker installed and running, then run:
+If all you need is basic Python code execution, consider using the provided root filesystem archive under our GitHub release. It comes preinstalled with:
 
-```bash
-pybubble rootfs your.dockerfile rootfs.tgz
-```
+- Python
+- uv
+- bash
+- ripgrep
+- cURL & wget
+- numpy
+- pandas
+- httpx & requests
+- pillow
+- ImageMagick
 
-Your root filesystem archive can now be used with sandboxes. Docker does not need to be installed to use this file, only to generate it.
+If you need more tools or want to run a leaner environment, follow [this guide](docs/build-rootfs.md) to build one yourself.
 
 ## Run code
 
@@ -32,18 +45,21 @@ Create a sandbox by doing:
 
 ```python
 from pybubble import Sandbox
+import asyncio
 
 async def main():
     s = Sandbox("path/to/rootfs.tgz")
 
-    stdout, stderr = await s.run("echo 'hello'")
+    stdout, stderr = await s.run("ping -c 1 google.com", allow_network=True)
 
-    print(stdout.decode("utf-8")) # "hello"
+    print(stdout.decode("utf-8")) # ping output
 
-    stdout, stderr = await s.run_python("print('hello, world')")
+    stdout, stderr = await s.run_python("print('hello, world')", timeout=5.0)
 
     print(stdout.decode("utf-8")) # "hello, world"
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+To learn more about the features available in `Sandbox`, see [this page](docs/sandbox.md).

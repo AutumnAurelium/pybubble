@@ -95,7 +95,7 @@ def cmd_generate_rootfs(args):
         return 1
     
     try:
-        generate_rootfs(dockerfile, output_file)
+        generate_rootfs(dockerfile, output_file, compress_level=args.compress_level)
         print(f"Successfully generated rootfs: {output_file}")
         return 0
     except Exception as e:
@@ -200,6 +200,12 @@ def main():
     rootfs_parser.add_argument(
         "output",
         help="Output path for the generated rootfs tarball"
+    )
+    rootfs_parser.add_argument(
+        "--compress-level",
+        type=int,
+        default=6,
+        help="Compression level for the generated rootfs tarball (default: 6)"
     )
     rootfs_parser.set_defaults(func=cmd_generate_rootfs)
     
