@@ -4,7 +4,7 @@ A simple wrapper around [bubblewrap](https://github.com/containers/bubblewrap) t
 
 While these environments are sandboxed and provide protection from accidental modification of your host system by overzealous LLMs, **pybubble is not an acceptable substitute for virtualization when running untrusted code**. If you are giving untrusted people access to this, either directly or via an LLM frontend, consider using more production-ready sandboxing or virtualization tools with pybubble just isolating environment state.
 
-Feel free to submit bug reports and pull requests via GitHub, but note that Arcee is not committing to long-term maintenence of this software. This is just a small library I built in my spare time and thought everyone else would find useful.
+Feel free to submit bug reports and pull requests via GitHub, but note that Arcee is not committing to long-term support of this software. I wrote this library in my spare time to solve an irritating problem with building code execution environments, so expect a pace of updates consistent with "time I have while waiting for a debug run to finish".
 
 Due to relying on Linux kernel features to operate, pybubble is not compatible with macOS or Windows.
 
